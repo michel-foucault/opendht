@@ -83,6 +83,99 @@ class WorkBench():
 
 
 
+def putsTimesTest():
+    """TODO: Docstring for
+
+    """
+
+    plt.ion()
+
+    fig, axes = plt.subplots(2, 1)
+    fig.tight_layout()
+
+    lax = axes[0]
+    hax = axes[1]
+
+    lines = None#ax.plot([])
+    #plt.ylabel('time (s)')
+    hax.set_ylim(0, 2)
+
+    # let the network stabilise
+    plt.pause(30)
+    bootstrap.resize(2)
+
+    #start = time.time()
+    times = []
+    done = 0
+
+    lock = threading.Condition()
+
+    def getcb(v):
+        print("found", v)
+        return True
+
+    def donecb(ok, nodes, start):
+        nonlocal lock, done, times
+        t = time.time()-start
+        with lock:
+            if not ok:
+                print("failed !")
+            times.append(t)
+            done -= 1
+            lock.notify()
+
+    def update_plot():
+        nonlocal lines
+        while lines:
+            l = lines.pop()
+            l.remove()
+            del l
+        if len(times) > 1:
+            n, bins, lines = hax.hist(times, 100, normed=1, histtype='stepfilled', color='g')
+            hax.set_ylim(min(n), max(n))
+            lines.extend(lax.plot(times, color='blue'))
+        plt.draw()
+
+    def run_put():
+        nonlocal done
+        done += 1
+        start = time.time()
+        bootstrap.get(1).put(InfoHash.getRandom(), Value(InfoHash.getRandom().toString()), lambda ok, nodes: donecb(ok, nodes, start))
+
+    plt.pause(5)
+    print(bootstrap.get(1).getRoutingTablesLog(2));
+    print(bootstrap.get(1).getRoutingTablesLog(10));
+
+    plt.show()
+    update_plot()
+
+    times = []
+    for n in range(10):
+        #wb.replace_cluster()
+        plt.pause(2)
+        print("Getting 50 random hashes succesively.")
+        print(bootstrap.get(1).getRoutingTablesLog(2));
+        print(bootstrap.get(1).getRoutingTablesLog(10));
+        for i in range(128):
+            with lock:
+                for _ in range(1):
+                    run_put()
+                while done > 0:
+                    lock.wait()
+                    update_plot()
+            update_plot()
+        print("Took", np.sum(times), "mean", np.mean(times), "std", np.std(times), "min", np.min(times), "max", np.max(times))
+
+    print(bootstrap.get(1).getRoutingTablesLog(2));
+    print(bootstrap.get(1).getRoutingTablesLog(10));
+
+    print('GET calls timings benchmark test : DONE. '  \
+            'Close Matplotlib window for terminating the program.')
+    plt.ioff()
+    plt.show()
+
+
+
 def getsTimesTest():
     """TODO: Docstring for
 
@@ -101,7 +194,8 @@ def getsTimesTest():
     hax.set_ylim(0, 2)
 
     # let the network stabilise
-    plt.pause(60)
+    plt.pause(30)
+    bootstrap.resize(2)
 
     #start = time.time()
     times = []
@@ -113,7 +207,7 @@ def getsTimesTest():
         print("found", v)
         return True
 
-    def donecb(ok, nodes):
+    def donecb(ok, nodes, start):
         nonlocal lock, done, times
         t = time.time()-start
         with lock:
@@ -129,35 +223,44 @@ def getsTimesTest():
             l = lines.pop()
             l.remove()
             del l
-        lines = plt.plot(times, color='blue')
+        if len(times) > 1:
+            n, bins, lines = hax.hist(times, 100, normed=1, histtype='stepfilled', color='g')
+            hax.set_ylim(min(n), max(n))
+            lines.extend(lax.plot(times, color='blue'))
         plt.draw()
 
     def run_get():
         nonlocal done
         done += 1
         start = time.time()
-        bootstrap.front().get(InfoHash.getRandom(), getcb, lambda ok, nodes: donecb(ok, nodes, start))
+        bootstrap.get(1).get(InfoHash.getRandom(), getcb, lambda ok, nodes: donecb(ok, nodes, start))
 
     plt.pause(5)
+    print(bootstrap.get(1).getRoutingTablesLog(2));
+    print(bootstrap.get(1).getRoutingTablesLog(10));
 
     plt.show()
-    update_plot()
+    update_plot()   
 
     times = []
     for n in range(10):
-        wb.replace_cluster()
+        #wb.replace_cluster()
         plt.pause(2)
         print("Getting 50 random hashes succesively.")
-        for i in range(50):
+        print(bootstrap.get(1).getRoutingTablesLog(2));
+        print(bootstrap.get(1).getRoutingTablesLog(10));
+        for i in range(128):
             with lock:
-                done += 1
-                start = time.time()
-                bootstrap.front().get(InfoHash.getRandom(), getcb, donecb)
+                for _ in range(1):
+                    run_get()
                 while done > 0:
                     lock.wait()
                     update_plot()
             update_plot()
         print("Took", np.sum(times), "mean", np.mean(times), "std", np.std(times), "min", np.min(times), "max", np.max(times))
+
+    print(bootstrap.get(1).getRoutingTablesLog(2));
+    print(bootstrap.get(1).getRoutingTablesLog(10));
 
     print('GET calls timings benchmark test : DONE. '  \
             'Close Matplotlib window for terminating the program.')
@@ -176,12 +279,13 @@ if __name__ == '__main__':
     parser.add_argument('-no4', '--disable-ipv4', help='Enable IPv4', action="store_true")
     parser.add_argument('-no6', '--disable-ipv6', help='Enable IPv6', action="store_true")
     parser.add_argument('--gets', action='store_true', help='Launches get calls timings benchmark test.', default=0)
+    parser.add_argument('--puts', action='store_true', help='Launches puts calls timings benchmark test.', default=0)
 
     args = parser.parse_args()
 
-    if args.gets < 1:
-        print('No test specified... Quitting.', file=sys.stderr)
-        sys.exit(1)
+    #if args.gets < 1:
+    #    print('No test specified... Quitting.', file=sys.stderr)
+    #    sys.exit(1)
 
     wb = WorkBench(args.ifname, args.virtual_locs, args.node_num, loss=args.loss,
             delay=args.delay, disable_ipv4=args.disable_ipv4,
@@ -198,6 +302,8 @@ if __name__ == '__main__':
 
         if args.gets:
             getsTimesTest()
+        if args.puts:
+            putsTimesTest()
 
     except Exception as e:
         print(e)

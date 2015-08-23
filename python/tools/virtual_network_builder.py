@@ -88,11 +88,11 @@ try:
             finally:
                 ip_ns.release()
 
-            nsp = NSPopen(nns.netns, ["tc", "qdisc", "add", "dev", iface1, "root", "netem", "delay", str(args.delay)+"ms", str(int(args.delay/2))+"ms", "loss", str(args.loss)+"%", "25%"], stdout=subprocess.PIPE)
+            #nsp = NSPopen(nns.netns, ["tc", "qdisc", "add", "dev", iface1, "root", "netem", "delay", str(args.delay)+"ms", str(int(args.delay/2))+"ms", "loss", str(args.loss)+"%", "25%"], stdout=subprocess.PIPE)
             #print(nsp.communicate()[0].decode())
-            nsp.communicate()
-            nsp.wait()
-            nsp.release()
+            #nsp.communicate()
+            #nsp.wait()
+            #nsp.release()
 
         if args.ipv4:
             subprocess.call(["sysctl", "-w", "net.ipv4.conf."+brige_name+".forwarding=1"])

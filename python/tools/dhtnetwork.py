@@ -2,7 +2,7 @@
 # Copyright (C) 2015 Savoir-Faire Linux Inc.
 # Author: Adrien Béraud <adrien.beraud@savoirfairelinux.com>
 
-import signal, os, sys, ipaddress, random
+import signal, os, sys, time, ipaddress, random
 from pyroute2 import IPDB
 
 sys.path.append('..')
@@ -10,6 +10,7 @@ from opendht import *
 
 class DhtNetwork(object):
     nodes = []
+    quit = False
 
     @staticmethod
     def run_node(ip4, ip6, p, bootstrap=[], is_bootstrap=False):
@@ -20,7 +21,8 @@ class DhtNetwork(object):
         n.run(id, ipv4=ip4 if ip4 else "", ipv6=ip6 if ip6 else "", port=p, is_bootstrap=is_bootstrap)
         for b in bootstrap:
             n.bootstrap(b[0], b[1])
-        #plt.pause(0.02)
+        #plt.pause(0.05)
+        time.sleep(0.050)
         return ((ip4, ip6, p), n, id)
 
     @staticmethod
@@ -54,8 +56,11 @@ class DhtNetwork(object):
         self.bootstrap = bootstrap
         if first_bootstrap:
             print("Starting bootstrap node")
-            self.nodes.append(DhtNetwork.run_node(self.ip4, self.ip6, self.port, self.bootstrap, is_bootstrap=True))
-            self.bootstrap = [(self.ip4, str(self.port))]
+            self.nodes.append(DhtNetwork.run_node(self.ip4, self.ip6, self.port, self.bootstrap, is_bootstrap=False))
+            if self.ip4:
+                self.bootstrap.append((self.ip4, str(self.port)))
+            if self.ip6:
+                self.bootstrap.append((self.ip6, str(self.port)))
             self.port += 1
         #print(self.ip4, self.ip6, self.port)
 
@@ -71,8 +76,9 @@ class DhtNetwork(object):
         n = DhtNetwork.run_node(self.ip4, self.ip6, self.port, self.bootstrap)
         self.nodes.append(n)
         if not self.bootstrap:
-            print("Using fallback bootstrap", self.ip4, self.port)
-            self.bootstrap = [(self.ip4, str(self.port))]
+            fallback_ip = self.ip4 if self.ip4 else self.ip6
+            print("Using fallback bootstrap", fallback_ip, self.port)
+            self.bootstrap = [(fallback_ip, str(self.port))]
         self.port += 1
         return n
 
@@ -95,23 +101,38 @@ class DhtNetwork(object):
         if n > l:
             print("Launching", n-l, "nodes")
             for i in range(l, n):
+                if self.quit:
+                    break
                 self.launch_node()
         else:
             print("Ending", l-n, "nodes")
             #random.shuffle(self.nodes)
+            toend = []
             for i in range(n, l):
-                self.end_node()
+                n = self.nodes.pop()
+                n[1].shutdown()
+                toend.append(n)
+            for n in toend:
+                n[1].join()
+
+    def shutdown(self):
+        self.quit = True
 
 if __name__ == '__main__':
     import argparse, threading
 
     lock = threading.Condition()
     quit = False
+    net = None
 
     def handler(signum, frame):
-        global quit
         with lock:
+            print("quit handler")
             quit = True
+            if net:
+                net.shutdown()
+        print("notifying", quit)
+        with lock:
             lock.notify()
 
     signal.signal(signal.SIGALRM, handler)
@@ -119,7 +140,6 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    net = None
     try:
         parser = argparse.ArgumentParser(description='Create a dht network of -n nodes')
         parser.add_argument('-n', '--node-num', help='number of dht nodes to run', type=int, default=32)
@@ -136,14 +156,17 @@ if __name__ == '__main__':
         if args.bootstrap6:
             bs.append((args.bootstrap6, args.bootstrap_port))
 
-        net = DhtNetwork(iface=args.iface, port=args.port, bootstrap=bs)
+        net = DhtNetwork(iface=args.iface, port=args.port+1 if bs else args.port, bootstrap=bs)
         net.resize(args.node_num)
 
         with lock:
-            while not quit:
-                lock.wait()
+            #while not quit:
+            print('cluster waiting')
+            lock.wait()
     except Exception as e:
         pass
     finally:
+        net.shutdown()
         if net:
             net.resize(0)
+    print('terminating cluster')
