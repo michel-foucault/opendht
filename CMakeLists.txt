@@ -18,7 +18,7 @@ option (OPENDHT_DEBUG "Build with debug flags" OFF)
 option (OPENDHT_STATIC "Build static library" ON)
 option (OPENDHT_SHARED "Build shared library" ON)
 
-set (CMAKE_CXX_FLAGS "-pthread -std=c++14 -Wno-return-type -Wall -Wextra -Wnon-virtual-dtor ${CMAKE_CXX_FLAGS}")
+set (CMAKE_CXX_FLAGS "-pthread -std=c++14 -flto -fuse-linker-plugin -Wno-return-type -Wall -Wextra -Wnon-virtual-dtor ${CMAKE_CXX_FLAGS}")
 set (CMAKE_CXX_FLAGS "-DMSGPACK_DISABLE_LEGACY_NIL -DMSGPACK_DISABLE_LEGACY_CONVERT ${CMAKE_CXX_FLAGS}")
 
 find_package (GnuTLS 3.1 REQUIRED)
@@ -92,12 +92,15 @@ if (NOT DEFINED CMAKE_INSTALL_LIBDIR)
 endif ()
 
 if (OPENDHT_STATIC)
+    SET (CMAKE_AR      "gcc-ar")
+    SET (CMAKE_NM      "gcc-nm")
+    SET (CMAKE_RANLIB  "gcc-ranlib")
     add_library (opendht-static STATIC
         ${opendht_SOURCES}
         ${opendht_HEADERS}
     )
     set_target_properties (opendht-static PROPERTIES OUTPUT_NAME "opendht")
-    target_link_libraries(opendht-static gnutls nettle)
+    target_link_libraries(opendht-static -flto -fuse-linker-plugin gnutls nettle)
     install (TARGETS opendht-static DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif ()
 
@@ -108,7 +111,7 @@ if (OPENDHT_SHARED)
     )
     set_target_properties (opendht PROPERTIES IMPORT_SUFFIX "_import.lib")
     #set_target_properties (opendht PROPERTIES SOVERSION 1 VERSION 1.0.0)
-    target_link_libraries(opendht gnutls nettle)
+    target_link_libraries(opendht -flto -fuse-linker-plugin gnutls nettle)
     install (TARGETS opendht DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif ()
 
