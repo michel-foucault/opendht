@@ -2344,9 +2344,11 @@ Dht::connectivityChanged(sa_family_t af)
     for (auto& sp : searches)
         for (auto& sn : sp.second->nodes)
             sn.listenStatus.clear();
-    reported_addr.erase(std::remove_if(reported_addr.begin(), reported_addr.end(), [&](const ReportedAddr& addr){
-        return addr.second.getFamily() == af;
-    }));
+    if (!reported_addr.empty()) {
+        reported_addr.erase(std::remove_if(reported_addr.begin(), reported_addr.end(), [&](const ReportedAddr& addr){
+            return addr.second.getFamily() == af;
+        }));
+    }
 }
 
 void
