@@ -22,11 +22,16 @@ option (OPENDHT_LTO "Build with LTO" OFF)
 
 find_package (GnuTLS 3.3 REQUIRED)
 find_package (Msgpack 1.2 REQUIRED)
+find_package (Nettle 3.3 REQUIRED)
+
 if (OPENDHT_TOOLS)
     find_package (Readline 6 REQUIRED)
 endif ()
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -std=c++11 -Wno-return-type -Wall -Wextra -Wnon-virtual-dtor -pedantic-errors")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wno-return-type -Wall -Wextra -Wnon-virtual-dtor")
+if (NOT APPLE)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -pedantic-errors")
+endif (NOT APPLE)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DMSGPACK_DISABLE_LEGACY_NIL -DMSGPACK_DISABLE_LEGACY_CONVERT")
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -108,6 +113,15 @@ if (NOT DEFINED CMAKE_INSTALL_LIBDIR)
     set(CMAKE_INSTALL_LIBDIR lib)
 endif ()
 
+if (APPLE)
+    set(CMAKE_MACOSX_RPATH ON)
+    include_directories (
+        ${MSGPACK_INCLUDE_DIR}
+        ${GNUTLS_INCLUDE_DIR}
+        ${NETTLE_INCLUDE_DIR}
+    )
+endif (APPLE)
+
 if (OPENDHT_STATIC)
     add_library (opendht-static STATIC
         ${opendht_SOURCES}
@@ -117,7 +131,7 @@ if (OPENDHT_STATIC)
     if (OPENDHT_LTO)
         target_link_libraries(opendht-static -flto -fuse-linker-plugin)
     endif ()
-    target_link_libraries(opendht-static gnutls nettle)
+    target_link_libraries(opendht-static ${MSGPACK_LIBRARY} ${GNUTLS_LIBRARY} ${NETTLE_LIBRARY})
     install (TARGETS opendht-static DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif ()
 
@@ -131,7 +145,7 @@ if (OPENDHT_SHARED)
     if (OPENDHT_LTO)
         target_link_libraries(opendht -flto -fuse-linker-plugin)
     endif ()
-    target_link_libraries(opendht gnutls nettle)
+    target_link_libraries(opendht ${MSGPACK_LIBRARY} ${GNUTLS_LIBRARY} ${NETTLE_LIBRARY})
     install (TARGETS opendht DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif ()
 
